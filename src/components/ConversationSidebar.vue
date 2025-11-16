@@ -32,16 +32,16 @@
     </button>
 
     <!-- New Chat Button / New Chat Icon -->
-    <RouterLink to="/" class="new-chat-btn" v-if="!isCollapsed">
+    <button @click="createNewChat" class="new-chat-btn" v-if="!isCollapsed">
       + New Chat
-    </RouterLink>
-    <RouterLink to="/" class="icon-btn" v-else title="New chat">
+    </button>
+    <button @click="createNewChat" class="icon-btn" v-else title="New chat">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
         <line x1="12" y1="7" x2="12" y2="13"></line>
         <line x1="9" y1="10" x2="15" y2="10"></line>
       </svg>
-    </RouterLink>
+    </button>
 
     <!-- Chat Sessions -->
     <div v-if="!isCollapsed" class="sessions-list">
@@ -63,10 +63,12 @@
 import { useChatStore } from '@/store'
 import { RouterLink } from 'vue-router'
 import { ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import LogoText from '@/components/LogoText.vue'
 
 const chatStore = useChatStore()
-const isCollapsed = ref(true)
+const router = useRouter()
+const isCollapsed = ref(false)
 const searchQuery = ref('')
 
 const filteredSessions = computed(() => {
@@ -78,6 +80,25 @@ const filteredSessions = computed(() => {
 
 const toggleCollapse = () => {
   isCollapsed.value = !isCollapsed.value
+}
+
+const createNewChat = () => {
+  // Create empty session - user will type first message
+  const sessionId = chatStore.generateSessionId()
+  
+  // Initialize session with empty messages array
+  const newSession = {
+    id: sessionId,
+    messages: [],
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    title: undefined,
+  }
+  
+  chatStore.sessions[sessionId] = newSession
+  chatStore.currentSessionId = sessionId
+  
+  router.push(`/c/${sessionId}`)
 }
 
 const isCurrentSession = (sessionId: string) => chatStore.currentSessionId === sessionId
