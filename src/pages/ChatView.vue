@@ -3,6 +3,7 @@ import { ref, nextTick, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import LogoText from '@/components/LogoText.vue'
 import ResponseIcon from '@/assets/ResponseIcon.vue'
+import ConversationSidebar from '@/components/ConversationSidebar.vue'
 import { useChatStore } from '@/store'
 import { parseMarkdown } from '@/utils/markdown'
 
@@ -155,10 +156,15 @@ const getMessageBorderRadius = (content: string) => {
 </script>
 
 <template>
-  <div class="flex flex-col h-screen bg-white">
-    <header
-      class="px-4 sm:px-6 lg:px-8 py-3 pt-10 sm:py-4 flex items-center justify-between bg-white sticky top-0 z-10"
-    >
+  <div class="flex h-screen bg-white">
+    <!-- Sidebar -->
+    <ConversationSidebar />
+
+    <!-- Main Chat Area -->
+    <div class="flex flex-col flex-1">
+      <header
+        class="px-4 sm:px-6 lg:px-8 py-3 pt-10 sm:py-4 flex items-center justify-between bg-white sticky top-0 z-10"
+      >
       <RouterLink to="/" class="flex items-center gap-2 sm:gap-3">
         <LogoText class="text-xl sm:text-2xl font-semibold" />
       </RouterLink>
@@ -295,6 +301,7 @@ const getMessageBorderRadius = (content: string) => {
           </button>
         </div>
       </div>
+    </div>
     </div>
   </div>
 </template>
