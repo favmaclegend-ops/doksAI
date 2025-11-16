@@ -13,6 +13,7 @@ export interface ChatSession {
   messages: Message[]
   createdAt: Date
   updatedAt: Date
+  title?: string
 }
 
 export interface Document {
