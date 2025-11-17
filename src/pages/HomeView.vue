@@ -23,7 +23,11 @@ const statusIndicatorRef = ref()
 const startChat = () => {
   if (!message.value.trim()) return
 
+  console.log('📝 Creating session with message:', message.value.trim())
   const sessionId = chatStore.createSession(message.value.trim())
+  console.log('✅ Session created:', sessionId)
+  console.log('Sessions in store after create:', Object.keys(chatStore.sessions))
+  console.log('Session data:', chatStore.sessions[sessionId])
   router.push(`/c/${sessionId}`)
 }
 

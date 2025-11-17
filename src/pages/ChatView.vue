@@ -10,6 +10,7 @@ import { parseMarkdown } from '@/utils/markdown'
 const route = useRoute()
 const router = useRouter()
 const chatStore = useChatStore()
+const currentInput = ref('')
 
 const inputMessage = ref('')
 const messagesContainer = ref<HTMLElement>()
@@ -17,13 +18,39 @@ const messagesContainer = ref<HTMLElement>()
 const sessionId = route.params.id as string
 
 onMounted(async () => {
+  console.log('🚀 ChatView onMounted called, sessionId:', sessionId)
+  console.log('Sessions in store:', Object.keys(chatStore.sessions))
+  console.log('Session data:', chatStore.sessions[sessionId])
+
+  // Ensure the session is set as current
   chatStore.setCurrentSession(sessionId)
 
+  // Wait for reactivity
   await nextTick()
-  if (chatStore.messages.length === 1 && chatStore.messages[0]?.isUser) {
-    generateInitialResponse(chatStore.messages[0].content)
+
+  console.log('✅ After setCurrentSession, currentSessionId:', chatStore.currentSessionId)
+  console.log('Current messages:', chatStore.messages)
+
+  // Check if there's a user message to generate response for
+  const userMessage = chatStore.messages.find((msg) => msg.isUser)
+  if (userMessage) {
+    // Check if AI response already exists
+    const hasAIResponse = chatStore.messages.some((msg) => !msg.isUser)
+    if (!hasAIResponse) {
+      console.log('Generating response for:', userMessage.content)
+      generateInitialResponse(userMessage.content)
+    }
   }
 })
+
+// Watch current session to detect when it changes
+watch(
+  () => chatStore.currentSessionId,
+  () => {
+    console.log('Current session changed:', chatStore.currentSessionId)
+    console.log('Messages:', chatStore.messages)
+  }
+)
 
 // Watch for message changes and auto-scroll during streaming
 watch(
@@ -49,19 +76,20 @@ watch(
 )
 
 const generateInitialResponse = async (userInput: string) => {
-  // Don't use queryRAG here because it adds the user message again
-  // The user message was already added when creating the session
+  console.log('🤖 generateInitialResponse called with:', userInput)
   chatStore.isLoading = true
 
   try {
     // Add initial AI message with streaming state
     const aiMessageId = chatStore.messages.length
+    console.log('📨 Adding AI message at index:', aiMessageId)
     chatStore.addMessage(sessionId, {
       content: '',
       isUser: false,
       timestamp: new Date(),
       isStreaming: true,
     })
+    console.log('📨 Messages after adding AI message:', chatStore.messages.length)
 
     // Import API functions directly
     const { ragAPI } = await import('@/services/api')
@@ -71,24 +99,29 @@ const generateInitialResponse = async (userInput: string) => {
       question: userInput,
     }
 
+    console.log('🔍 Querying RAG API with:', queryRequest)
     // Query the RAG API
     const response = await ragAPI.queryDocuments(queryRequest)
+    console.log('📬 API Response:', response)
 
     if (response.success && response.answer) {
       // Stream the response
+      console.log('⏳ Starting stream with text:', response.answer.text.substring(0, 50))
       await chatStore.streamResponse(sessionId, aiMessageId, response.answer.text, {
         sources: response.answer.sources,
         confidence: response.answer.confidence,
       })
+      console.log('✅ Stream completed')
     } else {
       // Handle error case
+      console.log('❌ API returned error:', response.error)
       chatStore.updateMessage(sessionId, aiMessageId, {
         content: `I apologize, but I encountered an error: ${response.error || 'Unable to process your question'}`,
         isStreaming: false,
       })
     }
   } catch (error) {
-    console.error('RAG query error:', error)
+    console.error('❌ RAG query error:', error)
     // Find the AI message and update it with error
     const aiMessageId = chatStore.messages.length - 1
     chatStore.updateMessage(sessionId, aiMessageId, {
@@ -111,14 +144,14 @@ const startNewChat = () => {
 const sendMessage = async () => {
   if (!inputMessage.value.trim() || chatStore.isLoading) return
 
-  const currentInput = inputMessage.value
+  currentInput.value = inputMessage.value
   inputMessage.value = ''
 
   // Scroll immediately when user message is added
   await nextTick()
   scrollToBottom('smooth')
 
-  await chatStore.queryRAG(sessionId, currentInput)
+  await chatStore.queryRAG(sessionId, currentInput.value)
 }
 
 const scrollToBottom = (behavior: ScrollBehavior = 'auto') => {
@@ -158,7 +191,7 @@ const getMessageBorderRadius = (content: string) => {
 <template>
   <div class="flex h-screen bg-white">
     <!-- Sidebar -->
-    <ConversationSidebar />
+    <ConversationSidebar :message="currentInput" />
 
     <!-- Main Chat Area -->
     <div class="flex flex-col flex-1">

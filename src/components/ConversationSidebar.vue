@@ -62,9 +62,13 @@
 <script setup lang="ts">
 import { useChatStore } from '@/store'
 import { RouterLink } from 'vue-router'
-import { ref, computed } from 'vue'
+import { ref, computed, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import LogoText from '@/components/LogoText.vue'
+
+const props = defineProps({
+  message: String
+})
 
 const chatStore = useChatStore()
 const router = useRouter()
@@ -82,22 +86,14 @@ const toggleCollapse = () => {
   isCollapsed.value = !isCollapsed.value
 }
 
-const createNewChat = () => {
+const createNewChat = async () => {
   // Create empty session - user will type first message
-  const sessionId = chatStore.generateSessionId()
-  
-  // Initialize session with empty messages array
-  const newSession = {
-    id: sessionId,
-    messages: [],
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    title: undefined,
-  }
-  
-  chatStore.sessions[sessionId] = newSession
-  chatStore.currentSessionId = sessionId
-  
+  const sessionId = chatStore.createSession(props.message)
+
+
+  // Ensure the session is reactively added
+  await nextTick()
+
   router.push(`/c/${sessionId}`)
 }
 
