@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, nextTick, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import LogoText from '@/components/LogoText.vue'
 import ResponseIcon from '@/assets/ResponseIcon.vue'
 import ConversationSidebar from '@/components/ConversationSidebar.vue'
 import { useChatStore } from '@/store'
@@ -326,10 +325,6 @@ const regenerateResponse = async () => {
         <div class="flex items-center gap-3">
           <!-- Mobile Sidebar Toggle (could be implemented if sidebar supports mobile overlay) -->
           <!-- For now, sidebar handles its own responsiveness via CSS classes -->
-
-          <router-link to="/">
-            <LogoText class="text-xl sm:text-2xl font-semibold" />
-          </router-link>
         </div>
         <button
           @click="startNewChat"
