@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useToastStore } from '@/store/toast'
-import Toast from './Toast.vue'
+import ToastNotification from './ToastNotification.vue'
 
 const toastStore = useToastStore()
 
@@ -40,7 +40,7 @@ const handleClose = (id: string) => {
           }"
           class="pointer-events-auto"
         >
-          <Toast :toast="toast" @close="handleClose(toast.id)" />
+          <ToastNotification :toast="toast" @close="handleClose(toast.id)" />
         </div>
       </TransitionGroup>
     </div>
