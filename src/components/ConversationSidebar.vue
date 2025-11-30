@@ -1,0 +1,276 @@
+<script setup lang="ts">
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useDebounceFn } from '@vueuse/core'
+import { useRouter, useRoute } from 'vue-router'
+import { useChatStore } from '@/store'
+import {
+  PlusIcon,
+  MagnifyingGlassIcon,
+  ChatBubbleLeftIcon,
+  TrashIcon,
+  ArchiveBoxIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+} from '@heroicons/vue/24/outline'
+
+const router = useRouter()
+const route = useRoute()
+const chatStore = useChatStore()
+
+const searchQuery = ref('')
+const debouncedSearchQuery = ref('')
+const searchInput = ref<HTMLInputElement | null>(null)
+const isCollapsed = ref(false)
+
+// Debounce search update
+const updateSearch = useDebounceFn((value: string) => {
+  debouncedSearchQuery.value = value
+}, 300)
+
+watch(searchQuery, (newValue) => {
+  updateSearch(newValue)
+})
+
+// Load sidebar state from localStorage
+onMounted(() => {
+  const savedState = localStorage.getItem('sidebar_collapsed')
+  if (savedState) {
+    isCollapsed.value = JSON.parse(savedState)
+  }
+  window.addEventListener('keydown', handleGlobalKeydown)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleGlobalKeydown)
+})
+
+const handleGlobalKeydown = (e: KeyboardEvent) => {
+  // Ctrl+K or Cmd+K for search
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    e.preventDefault()
+    if (isCollapsed.value) {
+      isCollapsed.value = false
+    }
+    searchInput.value?.focus()
+  }
+
+  // Ctrl+N or Cmd+N for new chat
+  if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+    e.preventDefault()
+    createNewChat()
+  }
+}
+
+const toggleSidebar = () => {
+  isCollapsed.value = !isCollapsed.value
+  localStorage.setItem('sidebar_collapsed', JSON.stringify(isCollapsed.value))
+}
+
+const filteredSessions = computed(() => {
+  const sessions = chatStore.getAllSessions
+  if (!debouncedSearchQuery.value) return sessions
+
+  const query = debouncedSearchQuery.value.toLowerCase()
+  return sessions.filter(
+    (session) =>
+      (session.title || 'New Chat').toLowerCase().includes(query) ||
+      session.messages.some((msg) => msg.content.toLowerCase().includes(query)),
+  )
+})
+
+const createNewChat = () => {
+  const sessionId = chatStore.createSession()
+  router.push(`/c/${sessionId}`)
+  // On mobile, we might want to close the sidebar here if it was an overlay
+}
+
+const selectSession = (sessionId: string) => {
+  router.push(`/c/${sessionId}`)
+  if (window.innerWidth < 640) {
+    isCollapsed.value = true
+  }
+}
+
+const deleteSession = (sessionId: string, event: Event) => {
+  event.stopPropagation() // Prevent navigation
+  if (confirm('Are you sure you want to delete this conversation?')) {
+    chatStore.deleteSession(sessionId)
+    if (route.params.id === sessionId) {
+      router.push('/')
+    }
+  }
+}
+
+const archiveSession = (sessionId: string, event: Event) => {
+  event.stopPropagation() // Prevent navigation
+  chatStore.archiveSession(sessionId)
+  if (route.params.id === sessionId) {
+    router.push('/')
+  }
+}
+
+const formatTime = (date: Date) => {
+  const now = new Date()
+  const diff = now.getTime() - new Date(date).getTime()
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24))
+
+  if (days === 0) {
+    return 'Today'
+  } else if (days === 1) {
+    return 'Yesterday'
+  } else if (days < 7) {
+    return `${days} days ago`
+  } else {
+    return new Date(date).toLocaleDateString()
+  }
+}
+
+// Group sessions by time
+const groupedSessions = computed(() => {
+  const groups: Record<string, typeof filteredSessions.value> = {}
+
+  filteredSessions.value.forEach((session) => {
+    const timeLabel = formatTime(session.updatedAt)
+    if (!groups[timeLabel]) {
+      groups[timeLabel] = []
+    }
+    groups[timeLabel].push(session)
+  })
+
+  return groups
+})
+</script>
+
+<template>
+  <div
+    class="flex flex-col h-full bg-gray-50 border-r border-gray-200 transition-all duration-300 ease-in-out relative"
+    :class="[isCollapsed ? 'w-0 sm:w-16' : 'w-full sm:w-[280px]']"
+  >
+    <!-- Toggle Button -->
+    <button
+      @click="toggleSidebar"
+      class="absolute -right-3 top-6 bg-white border border-gray-200 rounded-full p-1 shadow-sm hover:bg-gray-50 z-20 hidden sm:block"
+    >
+      <ChevronRightIcon v-if="isCollapsed" class="w-4 h-4 text-gray-500" />
+      <ChevronLeftIcon v-else class="w-4 h-4 text-gray-500" />
+    </button>
+
+    <!-- Header & New Chat -->
+    <div class="p-4" :class="{ 'px-2': isCollapsed }">
+      <button
+        @click="createNewChat"
+        class="w-full flex items-center gap-2 bg-white border border-gray-200 hover:border-gray-300 hover:shadow-sm text-gray-700 font-medium py-2.5 px-3 rounded-lg transition-all duration-200"
+        :class="{ 'justify-center': isCollapsed }"
+      >
+        <PlusIcon class="w-5 h-5" />
+        <span v-if="!isCollapsed" class="truncate">New Chat</span>
+      </button>
+    </div>
+
+    <!-- Search -->
+    <div v-if="!isCollapsed" class="px-4 mb-2">
+      <div class="relative">
+        <MagnifyingGlassIcon
+          class="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2"
+        />
+        <input
+          ref="searchInput"
+          v-model="searchQuery"
+          type="text"
+          placeholder="Search chats..."
+          class="w-full bg-white border border-gray-200 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+        />
+      </div>
+    </div>
+
+    <!-- Session List -->
+    <div class="flex-1 overflow-y-auto px-2 sm:px-3 py-2 space-y-6 scrollbar-thin">
+      <div v-if="isCollapsed" class="flex flex-col gap-2 items-center">
+        <button
+          v-for="session in filteredSessions"
+          :key="session.id"
+          @click="selectSession(session.id)"
+          class="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-200 transition-colors relative group"
+          :class="{
+            'bg-blue-50 text-blue-600': route.params.id === session.id,
+            'text-gray-600': route.params.id !== session.id,
+          }"
+          :title="session.title"
+        >
+          <ChatBubbleLeftIcon class="w-5 h-5" />
+        </button>
+      </div>
+
+      <template v-else>
+        <div v-for="(sessions, label) in groupedSessions" :key="label">
+          <h3
+            class="px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 sticky top-0 bg-gray-50 py-1"
+          >
+            {{ label }}
+          </h3>
+          <div class="space-y-1">
+            <div
+              v-for="session in sessions"
+              :key="session.id"
+              @click="selectSession(session.id)"
+              class="group flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors relative"
+              :class="{
+                'bg-white shadow-sm ring-1 ring-gray-200': route.params.id === session.id,
+                'hover:bg-gray-200/50': route.params.id !== session.id,
+              }"
+            >
+              <ChatBubbleLeftIcon class="w-4 h-4 text-gray-400 flex-shrink-0" />
+              <div class="flex-1 min-w-0">
+                <p class="text-sm text-gray-700 font-medium truncate">
+                  {{ session.title || 'New Chat' }}
+                </p>
+                <p class="text-xs text-gray-400 truncate">
+                  {{ session.messages[session.messages.length - 1]?.content || 'No messages' }}
+                </p>
+              </div>
+
+              <!-- Hover Actions -->
+              <div
+                class="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-gradient-to-l from-white via-white to-transparent pl-4"
+                :class="{ 'from-gray-200 via-gray-200': route.params.id !== session.id && false }"
+              >
+                <!-- Adjust gradient if needed -->
+                <button
+                  @click="archiveSession(session.id, $event)"
+                  class="p-1 hover:bg-gray-200 rounded text-gray-400 hover:text-gray-600"
+                  title="Archive"
+                >
+                  <ArchiveBoxIcon class="w-4 h-4" />
+                </button>
+                <button
+                  @click="deleteSession(session.id, $event)"
+                  class="p-1 hover:bg-red-50 rounded text-gray-400 hover:text-red-600"
+                  title="Delete"
+                >
+                  <TrashIcon class="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <div v-if="filteredSessions.length === 0" class="text-center py-8">
+        <p class="text-sm text-gray-500">No conversations found</p>
+      </div>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: #e5e7eb;
+  border-radius: 20px;
+}
+</style>

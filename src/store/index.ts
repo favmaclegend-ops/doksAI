@@ -1,14 +1,35 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import type { Message, ChatSession } from './types'
 import { v4 as uuidv4 } from 'uuid'
 import { ragAPI, type QueryRequest } from '@/services/api'
 import config from '@/config'
 
 export const useChatStore = defineStore('chat', () => {
-  const sessions = ref<Record<string, ChatSession>>({})
+  // Load sessions from localStorage if available
+  const savedSessions = localStorage.getItem('chat_sessions')
+  const initialSessions = savedSessions
+    ? JSON.parse(savedSessions, (key, value) => {
+        // Revive dates
+        if (key === 'createdAt' || key === 'updatedAt' || key === 'timestamp') {
+          return new Date(value)
+        }
+        return value
+      })
+    : {}
+
+  const sessions = ref<Record<string, ChatSession>>(initialSessions)
   const currentSessionId = ref<string | null>(null)
   const isLoading = ref(false)
+
+  // Persist sessions to localStorage whenever they change
+  watch(
+    sessions,
+    (newSessions) => {
+      localStorage.setItem('chat_sessions', JSON.stringify(newSessions))
+    },
+    { deep: true },
+  )
 
   const currentSession = computed(() => {
     return currentSessionId.value ? sessions.value[currentSessionId.value] : null
@@ -26,9 +47,15 @@ export const useChatStore = defineStore('chat', () => {
     const sessionId = generateSessionId()
     const newSession: ChatSession = {
       id: sessionId,
+      title: initialMessage
+        ? initialMessage.length > 50
+          ? initialMessage.substring(0, 50) + '...'
+          : initialMessage
+        : 'New Chat',
       messages: [],
       createdAt: new Date(),
       updatedAt: new Date(),
+      isArchived: false,
     }
 
     if (initialMessage) {
@@ -75,7 +102,7 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  const clearSession = (sessionId: string) => {
+  const deleteSession = (sessionId: string) => {
     if (sessions.value[sessionId]) {
       delete sessions.value[sessionId]
       if (currentSessionId.value === sessionId) {
@@ -84,10 +111,29 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  const archiveSession = (sessionId: string) => {
+    if (sessions.value[sessionId]) {
+      sessions.value[sessionId].isArchived = true
+      sessions.value[sessionId].updatedAt = new Date()
+    }
+  }
+
+  const updateSessionTitle = (sessionId: string, title: string) => {
+    if (sessions.value[sessionId]) {
+      sessions.value[sessionId].title = title
+      sessions.value[sessionId].updatedAt = new Date()
+    }
+  }
+
+  // clearSession is essentially deleteSession, keeping it for backward compatibility or refactoring it to use deleteSession
+  const clearSession = (sessionId: string) => {
+    deleteSession(sessionId)
+  }
+
   const getAllSessions = computed(() => {
-    return Object.values(sessions.value).sort(
-      (a, b) => b.updatedAt.getTime() - a.updatedAt.getTime(),
-    )
+    return Object.values(sessions.value)
+      .filter((session) => !session.isArchived)
+      .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
   })
 
   const queryRAG = async (sessionId: string, question: string, docId?: string): Promise<void> => {
@@ -204,6 +250,9 @@ export const useChatStore = defineStore('chat', () => {
     addMessage,
     updateMessage,
     clearSession,
+    deleteSession,
+    archiveSession,
+    updateSessionTitle,
     queryRAG,
     streamResponse,
   }
